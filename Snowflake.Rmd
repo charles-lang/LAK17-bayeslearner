@@ -1,0 +1,97 @@
+---
+title: "Snowflake"
+author: "Charles Lang"
+date: "3/15/2017"
+output: html_document
+---
+#Create predictions
+```{r}
+#Seed prior, accuracy and difficulty
+
+prior <- rep(0.5,length.out = ncol(D2)-2)
+  #c(0.5, 0.5, 0.5, 0.5, 0.5)
+mean.acc <- NA
+sum.acc <- NA
+mean.over <- NA
+sum.over <- NA
+mean.under <- NA
+sum.under <- NA
+i.acc <- rep(0,length.out = ncol(D2)-2)
+i.under <- rep(0.5,length.out = ncol(D2)-2)
+i.over <- rep(0.5,length.out = ncol(D2)-2)
+x <- rep(NA,length.out = ncol(D2)-2)
+x <- data.frame(x)
+D5 <- data.frame(seq(1,ncol(D2)-2,1))
+names(D5) <- c("id")
+
+for(i in 1:length(D2$time)){
+  
+  D3 <- dplyr::filter(D2, time == D2$time[i])
+  
+  D4 <- D3[,c(3:ncol(D2))]
+  
+  D4 <- as.data.frame(t(D4))
+
+  names(D4) <- c("correct")
+  
+  D4$prior <- prior
+ 
+  x <- cbind(prior, x)
+  
+  #Predict posterior for student
+  D4$pred.prob <- D2$difficulty[i]*D4$prior/(D2$difficulty[i]*D4$prior + (1-D4$prior)*(1-D2$difficulty[i]))
+  D4$pred.prob <- ifelse(is.nan(D4$pred.prob), 0, ifelse(is.na(D4$pred.prob), 0, D4$pred.prob))
+  
+  #Predict correct/incorrect for each student
+  D4$pred.score <- ifelse(D4$pred.prob >= 0.5, 1, 0)
+  
+  #Add student ID 
+  D4$id <- seq(1,length(D4$correct),1)
+  
+  #Calculate accuracy
+  D4$accuracy <- ifelse(D4$correct == D4$pred.score, 1, 0)
+  D4$over <- ifelse(D4$correct < D4$pred.score, 1, 0)
+  D4$under <- ifelse(D4$correct > D4$pred.score, 1, 0)
+  
+  sum.acc <- sum(D4$accuracy, sum.acc, na.rm = TRUE)
+  sum.over <- sum(D4$over, sum.over, na.rm = TRUE)
+  sum.under <- sum(D4$under, sum.under, na.rm = TRUE)
+  
+  mean.acc <- sum.acc/(sum.acc + sum.over + sum.under)
+  mean.over <- sum.over/(sum.acc + sum.over + sum.under)
+  mean.under <- sum.under/(sum.acc + sum.over + sum.under)
+  
+  D4$mean.acc <- mean.acc
+  
+  #print(D4)
+  
+  i.acc <- c(i.acc) + D4$accuracy
+  i.over <- c(i.over) + D4$over
+  i.under <- c(i.under) + D4$under
+  
+  D4$i.acc <- i.acc
+  D4$i.over <- i.over
+  D4$i.under <- i.under
+  
+  D4$cum.acc <- ifelse(D4$accuracy == 1, "C", ifelse(D4$over == 1, "O", "U"))
+  D5 <- cbind(D5,D4$cum.acc)
+  
+    #Predict the posterior probability of being correct
+    D4$pred.prob.acc <- D4$i.acc/(D4$i.acc + D4$i.over + D4$i.under)
+                                                           
+    #Predict the posterior probability of over predicting  
+    D4$pred.prob.over <- D4$i.over/(D4$i.acc + D4$i.over + D4$i.under)
+    
+    D4$pred.prob.over <- ifelse(is.nan(D4$pred.prob.over), 0, ifelse(is.na(D4$pred.prob.over), 0, ifelse(D4$pred.prob.over == 1, 0.999, D4$pred.prob.over)))
+    
+    #Predict the posterior probability of under predicting
+    D4$pred.prob.under <- D4$i.under/(D4$i.acc + D4$i.over + D4$i.under)
+    
+    D4$pred.prob.under <- ifelse(is.nan(D4$pred.prob.under), 0, ifelse(is.na(D4$pred.prob.under), 0, ifelse(D4$pred.prob.under == 1, 0.999, D4$pred.prob.under)))
+    
+    #Generate prior for next round
+    
+    prior <- (D4$prior + D4$pred.prob.under*(1 - D4$prior) - D4$prior*D4$pred.prob.over)
+    
+  }
+```
